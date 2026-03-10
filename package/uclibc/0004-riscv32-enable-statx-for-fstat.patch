@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rve build fix <noreply@example.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: [PATCH] riscv32: enable statx for fstat
+
+On riscv32 with Linux 6.x kernel headers, __NR_fstat and __NR_fstat64
+are not defined because RISC-V does not set __ARCH_WANT_TIME32_SYSCALLS,
+causing the NR3264_fstat definitions to be excluded. The only available
+stat mechanism is statx (syscall 291).
+
+Enable __UCLIBC_HAVE_STATX__ so that fstat.c (and related files) use
+the statx code path instead of falling through to an undefined symbol.
+---
+ libc/sysdeps/linux/riscv32/bits/uClibc_arch_features.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/libc/sysdeps/linux/riscv32/bits/uClibc_arch_features.h b/libc/sysdeps/linux/riscv32/bits/uClibc_arch_features.h
+index 1111111..2222222 100644
+--- a/libc/sysdeps/linux/riscv32/bits/uClibc_arch_features.h
++++ b/libc/sysdeps/linux/riscv32/bits/uClibc_arch_features.h
+@@ -13,2 +13,2 @@
+-/* does your target use statx */
+-#undef __UCLIBC_HAVE_STATX__
++/* riscv32 with 6.x kernel headers has no __NR_fstat; must use statx */
++#define __UCLIBC_HAVE_STATX__
+--
+2.30.2
