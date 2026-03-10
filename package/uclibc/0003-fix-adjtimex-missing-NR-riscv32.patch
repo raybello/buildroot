@@ -17,18 +17,16 @@ diff --git a/libc/sysdeps/linux/common/adjtimex.c b/libc/sysdeps/linux/common/ad
 index 1111111..2222222 100644
 --- a/libc/sysdeps/linux/common/adjtimex.c
 +++ b/libc/sysdeps/linux/common/adjtimex.c
-@@ -9,5 +9,11 @@
- #include <sys/syscall.h>
- #include <sys/time.h>
- #include <sys/timex.h>
-+#include <errno.h>
+@@ -11,3 +11,9 @@
+
 
 -_syscall1(int, adjtimex, struct timex *, buf)
 +#ifdef __NR_adjtimex
 +_syscall1(int, adjtimex, struct timex *, buf)
 +#else
-+/* adjtimex syscall not defined for this arch (e.g. riscv32 y2038-safe) */
-+int adjtimex(struct timex *buf) { __set_errno(ENOSYS); return -1; }
++#include <errno.h>
++int adjtimex(struct timex *buf) { errno = ENOSYS; return -1; }
 +#endif
+ libc_hidden_def(adjtimex)
 --
 2.30.2
