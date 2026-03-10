@@ -17,9 +17,7 @@ diff --git a/libc/sysdeps/linux/common/adjtimex.c b/libc/sysdeps/linux/common/ad
 index 1111111..2222222 100644
 --- a/libc/sysdeps/linux/common/adjtimex.c
 +++ b/libc/sysdeps/linux/common/adjtimex.c
-@@ -11,3 +11,9 @@
-
-
+@@ -13,1 +13,6 @@
 -_syscall1(int, adjtimex, struct timex *, buf)
 +#ifdef __NR_adjtimex
 +_syscall1(int, adjtimex, struct timex *, buf)
@@ -27,6 +25,5 @@ index 1111111..2222222 100644
 +#include <errno.h>
 +int adjtimex(struct timex *buf) { errno = ENOSYS; return -1; }
 +#endif
- libc_hidden_def(adjtimex)
 --
 2.30.2
