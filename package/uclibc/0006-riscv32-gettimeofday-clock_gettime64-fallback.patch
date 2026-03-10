@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rve build fix <noreply@example.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: [PATCH] riscv32: fall back to clock_gettime64 for gettimeofday
+
+On riscv32 with Linux 6.x kernel headers, __NR_gettimeofday is absent
+because RISC-V does not set __ARCH_WANT_TIME32_SYSCALLS. The 64-bit
+clock_gettime64 (syscall 403) is available instead.
+
+Wrap the existing gettimeofday function body in #ifdef __NR_gettimeofday
+and add a #elif __NR_clock_gettime64 fallback that calls clock_gettime64
+with CLOCK_REALTIME and converts the result to struct timeval.
+---
+ libc/sysdeps/linux/common/gettimeofday.c | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/libc/sysdeps/linux/common/gettimeofday.c b/libc/sysdeps/linux/common/gettimeofday.c
+index 1111111..2222222 100644
+--- a/libc/sysdeps/linux/common/gettimeofday.c
++++ b/libc/sysdeps/linux/common/gettimeofday.c
+@@ -21,14 +21,29 @@
+-int gettimeofday(struct timeval * tv, __timezone_ptr_t tz) {
+-
+-    #ifdef __VDSO_SUPPORT__
+-        if ( _dl__vdso_gettimeofday != 0 ){
+-            gettimeofday_func func= _dl__vdso_gettimeofday;
+-            return func( tv, tz );
+-
+-        }else{
+-            _syscall2_body(int, gettimeofday, struct timeval *, tv, __timezone_ptr_t, tz)
+-        }
+-    #else
+-        _syscall2_body(int, gettimeofday, struct timeval *, tv, __timezone_ptr_t, tz)
+-    #endif
+-}
++#ifdef __NR_gettimeofday
++int gettimeofday(struct timeval * tv, __timezone_ptr_t tz) {
++
++    #ifdef __VDSO_SUPPORT__
++        if ( _dl__vdso_gettimeofday != 0 ){
++            gettimeofday_func func= _dl__vdso_gettimeofday;
++            return func( tv, tz );
++
++        }else{
++            _syscall2_body(int, gettimeofday, struct timeval *, tv, __timezone_ptr_t, tz)
++        }
++    #else
++        _syscall2_body(int, gettimeofday, struct timeval *, tv, __timezone_ptr_t, tz)
++    #endif
++}
++#elif defined __NR_clock_gettime64
++/* gettimeofday syscall not available (e.g. riscv32 y2038-safe); use clock_gettime64 */
++int gettimeofday(struct timeval *tv, __timezone_ptr_t tz)
++{
++	if (tv) {
++		struct { long long tv_sec; int tv_nsec; } ts;
++		int ret = INLINE_SYSCALL(clock_gettime64, 2, 0, &ts);
++		if (ret) return ret;
++		tv->tv_sec = ts.tv_sec;
++		tv->tv_usec = ts.tv_nsec / 1000;
++	}
++	return 0;
++}
++#endif
+--
+2.30.2
