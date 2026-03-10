@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rve build fix <noreply@example.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: [PATCH] libc: guard adjtimex against missing __NR_adjtimex
+
+On riscv32, Linux never defined __NR_adjtimex because RISC-V uses
+64-bit time_t from the start (y2038-safe ABI). __ARCH_WANT_TIME32_SYSCALLS
+is not set for RISC-V, so the asm-generic header omits __NR_adjtimex.
+
+Guard the _syscall1 expansion with #ifdef __NR_adjtimex and fall back
+to ENOSYS so the build succeeds on riscv32 with 6.x kernel headers.
+---
+ libc/sysdeps/linux/common/adjtimex.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/libc/sysdeps/linux/common/adjtimex.c b/libc/sysdeps/linux/common/adjtimex.c
+index 1111111..2222222 100644
+--- a/libc/sysdeps/linux/common/adjtimex.c
++++ b/libc/sysdeps/linux/common/adjtimex.c
+@@ -9,5 +9,11 @@
+ #include <sys/syscall.h>
+ #include <sys/time.h>
+ #include <sys/timex.h>
++#include <errno.h>
+
+-_syscall1(int, adjtimex, struct timex *, buf)
++#ifdef __NR_adjtimex
++_syscall1(int, adjtimex, struct timex *, buf)
++#else
++/* adjtimex syscall not defined for this arch (e.g. riscv32 y2038-safe) */
++int adjtimex(struct timex *buf) { __set_errno(ENOSYS); return -1; }
++#endif
+--
+2.30.2
