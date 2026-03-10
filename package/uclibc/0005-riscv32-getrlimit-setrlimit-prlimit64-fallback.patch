@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rve build fix <noreply@example.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: [PATCH] riscv32: fall back to prlimit64 for getrlimit/setrlimit
+
+On riscv32 with Linux 6.x kernel headers, __NR_getrlimit and
+__NR_setrlimit are absent because RISC-V does not define
+__ARCH_WANT_SET_GET_RLIMIT (those syscalls are superseded by prlimit64).
+
+Add a #elif __NR_prlimit64 branch inside the existing #else block of
+getrlimit.c and setrlimit.c so that riscv32 builds cleanly.
+---
+ libc/sysdeps/linux/common/getrlimit.c | 16 ++++++++++++++++
+ libc/sysdeps/linux/common/setrlimit.c | 16 ++++++++++++++++
+ 2 files changed, 32 insertions(+)
+
+diff --git a/libc/sysdeps/linux/common/getrlimit.c b/libc/sysdeps/linux/common/getrlimit.c
+index 1111111..2222222 100644
+--- a/libc/sysdeps/linux/common/getrlimit.c
++++ b/libc/sysdeps/linux/common/getrlimit.c
+@@ -35,0 +35,1 @@
++#if defined __NR_getrlimit
+@@ -56,2 +57,15 @@
+-}
+-#endif
++}
++#elif defined __NR_prlimit64
++/* no getrlimit syscall available; use prlimit64 as fallback (e.g. riscv32) */
++int getrlimit(__rlimit_resource_t resource, struct rlimit *rlimits)
++{
++	struct { unsigned long long rlim_cur, rlim_max; } r64;
++	int ret = INLINE_SYSCALL(prlimit64, 4, 0, resource, (void *)0, &r64);
++	if (ret == 0) {
++		rlimits->rlim_cur = (r64.rlim_cur == ~0ULL) ? RLIM_INFINITY : (rlim_t)r64.rlim_cur;
++		rlimits->rlim_max = (r64.rlim_max == ~0ULL) ? RLIM_INFINITY : (rlim_t)r64.rlim_max;
++	}
++	return ret;
++}
++#endif
++#endif
+
+diff --git a/libc/sysdeps/linux/common/setrlimit.c b/libc/sysdeps/linux/common/setrlimit.c
+index 1111111..2222222 100644
+--- a/libc/sysdeps/linux/common/setrlimit.c
++++ b/libc/sysdeps/linux/common/setrlimit.c
+@@ -40,0 +40,1 @@
++#if defined __NR_setrlimit
+@@ -61,2 +62,12 @@
+-}
+-#endif
++}
++#elif defined __NR_prlimit64
++/* no setrlimit syscall available; use prlimit64 as fallback (e.g. riscv32) */
++int setrlimit(__rlimit_resource_t resource, const struct rlimit *rlimits)
++{
++	struct { unsigned long long rlim_cur, rlim_max; } r64;
++	r64.rlim_cur = (rlimits->rlim_cur == RLIM_INFINITY) ? ~0ULL : (unsigned long long)rlimits->rlim_cur;
++	r64.rlim_max = (rlimits->rlim_max == RLIM_INFINITY) ? ~0ULL : (unsigned long long)rlimits->rlim_max;
++	return INLINE_SYSCALL(prlimit64, 4, 0, resource, &r64, (void *)0);
++}
++#endif
++#endif
+--
+2.30.2
